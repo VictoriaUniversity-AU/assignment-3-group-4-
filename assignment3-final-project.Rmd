@@ -1,0 +1,103 @@
+---
+title: "Assignmnet -3 -Report"
+author: "Mariam Rao s4664140,Nishedh Dhungana"
+date: "07/06/2022"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(skimr)
+library(rsample)
+library(knitr)
+library(ggplot2)
+library(dplyr)
+library(forcats)
+library(xgboost)
+```
+
+### loading the data 
+```{r}
+data <- read.csv("kaggleV2-May-2016.csv")
+```
+
+###reviw the data set using skim r 
+
+```{r}
+skim(data)%>%
+  knitr::kable()
+```
+###count neighbourhood
+
+```{r}
+data %>% 
+  count(Neighbourhood)%>%
+  summarise(dist_Neighbourhood=n_distinct(Neighbourhood))%>% # counting didtinct neighbourhood
+  knitr::kable()
+ 
+ data%>%
+ count(Gender)%>%
+  knitr::kable() # counting the gender
+ 
+data%>%
+  group_by(Neighbourhood,Gender)%>%
+summarise(aver_Age = mean(Age))%>% # grouping by neighbour hood with gender to get the mean age .
+  arrange(desc(aver_Age))%>%
+  ungroup()%>%
+  knitr::kable()
+  
+ 
+data%>%
+  count(PatientId)%>%
+  summarise(distinct_Patient-id=n_distinct(PatientId))%>%
+  knitr::kable()
+
+  
+
+
+```
+
+
+```{r}
+data%>%
+  group_by(Neighbourhood)%>% # getting the ditinct count of patient by neighubourhood
+summarise(total_patients = n_distinct(PatientId))%>%
+  arrange(desc(total_patients))%>%
+    
+  ungroup()%>%
+  knitr::kable() # i want to sum all the patients ?
+ 
+ 
+        
+  ggplot(aes(x= Neighbourhood , y= total_patients ,   
+             fill = Neighbourhood , color = Neighbourhood
+             ))+ #plotting distribution of neighboourhood 
+  
+  labs(x = "Neighbourhood ", y = "Total Patients",
+       
+      title ="Total Patients Across The Neighbourhoods " )+
+  
+  geom_boxplot(alpha = 0.2, size = 1.5, show.legend = FALSE)+
+  
+
+  theme(axis.title.x = element_text(angle = 90, size = 2))
+```
+###how many patients has scholarships
+
+```{r}
+## nrwo use to count schorlship as it is 0\1
+data %>%
+ count(Scholarship)%>%
+ 
+  knitr::kable()
+
+data %>%
+  group_by(PatientId,Neighbourhood, Gender)%>%
+  summarise(total_scholarship = n_distinct(Scholarship))%>%
+  arrange(total_scholarship)%>%
+  ungroup()%>%
+  knitr::kable()
+  
+```
+
