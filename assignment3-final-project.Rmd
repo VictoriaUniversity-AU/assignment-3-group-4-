@@ -15,89 +15,451 @@ library(ggplot2)
 library(dplyr)
 library(forcats)
 library(xgboost)
+library(reshape2)
+library(heatmaply)
+library(gridExtra)
+library(themis)
+
+
+options(scipen = 100) # using scipen to avoid scientific format notation in patient ID.
+
+
 ```
 
-### loading the data 
+#1. Loading the data
+#2.Data Analysis
+#3 Data Pr-processing
+#4. Model Building 
+#5. Model Evaluation
+
+#For presentation , the results of each model will be obtained from  
+#lgr_results
+#knn_results
+#rforest_results
+#also show confusion matrix of each of the above. 
+#In last slide compare all three results metrics in one table on a powerpoint slide
+
+
+
+#1 loading the data 
 ```{r}
 data <- read.csv("kaggleV2-May-2016.csv")
 ```
 
-###reviw the data set using skim r 
-
+#2.Data Analysis / Exploratory Analysis
 ```{r}
+
+# reviw the data set using skim r
+
+# <!-- Missing Values: Overall there are no missing values -->
+# 
+# <!-- Binary predictors : There are few data columns given as binary values which represent true or false. These variables are -->
+# <!-- scholarship: -->
+# <!-- Hipertension: -->
+# <!-- diabetes: -->
+# <!-- Alcholism: -->
+# 
+# <!-- SMS.received: -->
+# 
+# <!-- Non-Binary Predictors: Handicap is a non-binary predictor as its value ranges from 0 to 4. -->
+# 
+# <!-- Demographic Data: The following columns represent demographic data about the patient. -->
+# 
+# 
+# <!-- Gender : Identifies whether patient is male or female -->
+# <!-- Age: determines the age of the patient -->
+# <!-- Neighbourhood: describes the patients neighbourhood. -->
+# 
+# <!-- PatientID : is numeric and loads in scientific format. We will change it to numeric format. -->
+# <!-- AppointmentID : is numeric, each patient can have more than one appointment ID. -->
+# <!-- ScheduledDay : represent the day when the appointment was scheduled -->
+# <!-- AppointmentDay: represent the actual date of appointment -->
+ 
+
+
 skim(data)%>%
   knitr::kable()
-```
-###count neighbourhood
 
-```{r}
+
+#Check Missing Values : There are no missing values in the data
+
+sapply(data,function(x)sum(is.na(x)))
+
+
+
+
+
+#Adding a numeric variable for output. It will be 1 when NoShow is true and 0 when Noshow is false
+data <- data %>%
+  mutate(NoShowInt=
+           ifelse(No.show=="Yes",1,0)
+  )
+head(data)
+
+
+
+
+
+#Preparing data for creating a corelation matrix to observe relationship between variables
+pred_data <- data [, c(6,8,9,10,11,12,13,15)]
+head(pred_data)
+
+
+heatmaply_cor(x = cor(pred_data),
+              xlab="Features",
+              ylab="Features",
+              k_col=2,
+              k_row=2)
+
+#The result shows medium negative correlation between age, hipertension and Not showing up. Similarly there's high positive corelation between sms received and not showing up. The result also  shows medium  correlation between Age, Hipertension and Diabetes patients. 
+
+
+#standardizing data to explore Z distributed normalized data ( standard deviation =1 and mean=0)
+scaled_data <-
+  scale(pred_data,center = TRUE, scale = TRUE)
+head(scaled_data)
+
+
+
+##count neighbourhood
 data %>% 
   count(Neighbourhood)%>%
-  summarise(dist_Neighbourhood=n_distinct(Neighbourhood))%>% # counting didtinct neighbourhood
-  knitr::kable()
+  summarise(dist_Neighbourhood=n_distinct(Neighbourhood))# counting didtinct neighbourhood
+  #knitr::kable()
  
  data%>%
- count(Gender)%>%
-  knitr::kable() # counting the gender
+ count(Gender)#%>%
+  #knitr::kable() # counting the gender
  
 data%>%
   group_by(Neighbourhood,Gender)%>%
 summarise(aver_Age = mean(Age))%>% # grouping by neighbour hood with gender to get the mean age .
   arrange(desc(aver_Age))%>%
-  ungroup()%>%
-  knitr::kable()
+  ungroup()
+  #knitr::kable()
   
  
-data%>%
-  count(PatientId)%>%
-  summarise(distinct_Patient-id=n_distinct(PatientId))%>%
-  knitr::kable()
-
-  
 
 
-```
-
-
-```{r}
 data%>%
   group_by(Neighbourhood)%>% # getting the ditinct count of patient by neighubourhood
 summarise(total_patients = n_distinct(PatientId))%>%
   arrange(desc(total_patients))%>%
     
-  ungroup()%>%
-  knitr::kable() # i want to sum all the patients ?
+  ungroup()
+  #knitr::kable() # i want to sum all the patients ?
  
  
         
-  ggplot(aes(x= Neighbourhood , y= total_patients ,   
-             fill = Neighbourhood , color = Neighbourhood
-             ))+ #plotting distribution of neighboourhood 
-  
-  labs(x = "Neighbourhood ", y = "Total Patients",
-       
-      title ="Total Patients Across The Neighbourhoods " )+
-  
-  geom_boxplot(alpha = 0.2, size = 1.5, show.legend = FALSE)+
   
 
-  theme(axis.title.x = element_text(angle = 90, size = 2))
-```
-###how many patients has scholarships
-
-```{r}
-## nrwo use to count schorlship as it is 0\1
+## nrwo use to count scholarship as it is 0\1
 data %>%
- count(Scholarship)%>%
+ count(Scholarship)
  
-  knitr::kable()
+ # knitr::kable()
 
 data %>%
   group_by(PatientId,Neighbourhood, Gender)%>%
   summarise(total_scholarship = n_distinct(Scholarship))%>%
   arrange(total_scholarship)%>%
-  ungroup()%>%
-  knitr::kable()
+  ungroup()
+  #knitr::kable()
+
+
+# Age Vs No Show. 
+
+# age vs showed up or not
+# blue showed up
+data %>% ggplot(aes(x=Age)) + 
+    geom_histogram(data=subset(data,No.show == 'No'),fill = '#00BFC4', alpha = 0.8, bins = 40) +
+    geom_histogram(data=subset(data,No.show == 'Yes'),fill = '#F8766D', alpha = 0.8, bins = 40) +
+    ggtitle('Relation between Age & Showing up')+
+    theme(plot.title = element_text(hjust = 0.5))
+
+
+
+# Gender Vs Now Show 
+
+data %>% ggplot()+
+    geom_bar(aes(x = Gender, fill = No.show))+
+    ggtitle("Gender vs No Show ")+
+    theme(plot.title = element_text(hjust = 0.5))+
+    ylab("Count")+
+    xlab("Gender")
+
+
+# Neighborhood Vs Now Show
+Neighbour_df <- data.frame(table(data$Neighbourhood, data$No.show))
+names(Neighbour_df) <- c("Neighbourhood", "No.show", 'Count')
+head(Neighbour_df)
+
+Neighbour_df %>% ggplot()+
+geom_bar(aes(x = reorder(Neighbourhood, -Count), y = Count, fill = No.show), stat = 'identity')+
+    theme(axis.text.x = element_text(size= 12, angle = 90, hjust = 1))+
+    ggtitle("Neighborhood and how  No Show appeared in dataset")+
+    ylab('Count')+
+    xlab('Neighborhood')+
+    theme(plot.title = element_text(hjust = 0.5, size = 24))+
+    theme(axis.title.y = element_text(size =18))+ 
+    theme(axis.title.x = element_text(size =18))
+
+
+
+#Relationship exploration between predictor variable and outcome variable. 
+
+pv1 <- data %>% ggplot()+geom_bar(aes(Scholarship, fill = No.show))
+pv2 <-  data %>% ggplot()+geom_bar(aes(Hipertension, fill =No.show))
+pv3 <-  data %>% ggplot()+geom_bar(aes(Diabetes, fill = No.show))
+pv4 <-  data %>% ggplot()+geom_bar(aes (Alcoholism, fill =  No.show))
+pv5 <-  data %>% ggplot()+geom_bar(aes( Handcap, fill = No.show))
+pv6 <-  data %>% ggplot()+geom_bar(aes(SMS_received, fill = No.show))
+
+grid.arrange(pv1,pv2,pv3,pv4,pv5,pv6, nrow=2)
+
+
+
+
+
   
 ```
+
+
+#3 Data Preprocessing 
+
+```{r}
+
+#Calculate no. of days between Scheduled date and appointment date. 
+data <- data %>%
+  mutate (days_lag=
+            as.integer(
+            difftime(as.POSIXct(data$AppointmentDay),
+                     as.POSIXct(data$ScheduledDay),
+                     units = "days")
+              )
+            )
+
+
+#Change data type of columns which we want to use as factors.
+
+
+ data <- mutate_at(data, vars('Gender',
+                    'Neighbourhood',
+                    'Scholarship',
+                    'Hipertension',
+                    'Diabetes',
+                    'Alcoholism',
+                    'SMS_received',
+                    'No.show'
+                    ), as.factor)
+
+
+```
+#3 Data Preprocessing 
+
+
+```{r}
+ 
+
+#A. Split the data set for ML with 75% for training and 25% for testing
+
+split_data <- initial_split(data, prop=0.75) # using 75% of data for training, hence prop=0.75
+train_data <- training(split_data) # creating training data set
+test_data <- testing(split_data)  # creating testing data set
+
+#creating folds 
+set.seed(123)
+patient_folds <- vfold_cv(train_data, v=5, strata=No.show) #using stratified sampling
+
+#B. Creating Recipe for data preprocessing
+
+
+
+
+
+recipe_patients <- 
+  recipe(No.show ~ 
+           Age+  Scholarship+Hipertension+Diabetes+Alcoholism+Handcap+ SMS_received,days_lag,
+           data = train_data) %>%
+    
+    step_dummy(all_nominal(), -all_outcomes())%>% # create dummy variables for all factors
+    step_corr(all_predictors()) %>% # This will remove corrleation amongst the predictor variables
+    step_center(all_predictors(),-all_outcomes()) %>% # Subtract the mean from all predictors
+    step_scale(all_predictors(), -all_outcomes()) %>% # scale i.e. divide by standard deviation
+    step_smote(No.show, over_ratio=0.25)
+
+
+```
+
+#4 Creating 3 different Models
+
+```{r}        
+  
+
+
+#A1. Creating Model #1 Logistic Regression
+
+patient_model_lgr <- logistic_reg() %>%
+  set_engine("glm") %>%
+  set_mode("classification")
+
+#A2. Creating Model #2 Random Forest
+
+patient_model_rforest <-rand_forest(
+  trees=100
+)%>%
+  set_engine("ranger")%>%
+  set_mode("classification")
+
+#A3. Creating Model #3 K-nearest Neighbor
+
+patient_model_knn <-nearest_neighbor(
+  neighbors  =4
+)%>%
+  set_engine("kknn")%>%
+  set_mode("classification")
+
+
+#B1. Creating a Workflow to bundle our recipe with our model Logistic Regression
+
+patient_lgr_workflow <- workflow()%>%
+  add_model(patient_model_lgr)%>%
+    add_recipe(recipe_patients)
+
+#B2. Creating a Workflow to bundle our recipe with our model Random Forest
+
+
+patient_rforest_workflow <- workflow()%>%
+  add_model(patient_model_rforest)%>%
+    add_recipe(recipe_patients)
+
+#B3. Creating a Workflow to bundle our recipe with our model K Nearest Neighbor
+
+
+patient_knn_workflow <- workflow()%>%
+  add_model(patient_model_knn)%>%
+    add_recipe(recipe_patients)
+
+
+#C1. Fitting our logistic regression model.
+
+
+ patient_lgr_fit <- 
+   
+   patient_lgr_workflow %>%
+   
+      fit(train_data)
+ 
+ #C2. Fitting our Random Forest model.
+  patient_rforest_fit <- 
+   
+   patient_rforest_workflow %>%
+  
+      fit(train_data)
+  
+   #C3. Fitting our KNN model.
+  patient_knn_fit <- 
+   
+   patient_knn_workflow %>%
+  
+      fit(train_data)
+ 
+  
+  #setting metrics for evaluation
+      custom_metrics <-metric_set(accuracy, sens, spec, precision, recall,f_meas,kap)
+
+
+
+
+#D1 . Evaluating Results for Logistic Regression Model
+  
+  lgr_results <-
+    patient_lgr_workflow %>%
+      fit_resamples(
+        resamples=patient_folds,
+        metrics=custom_metrics,
+        control=control_resamples(save_pred = TRUE)
+      )
+
+  lgr_results %>% collect_metrics(summarize=TRUE)
+  
+  #To obtain actual model predictions, we use the following function 
+  
+  lgr_predictions <-
+    lgr_results %>%
+    collect_predictions()
+
+  #creating confusion metrics
+  
+  lgr_predictions %>%
+    conf_mat(No.show,.pred_class)%>%
+    autoplot(type="heatmap")
+
+ 
+
+  
+
+ #D2 . Evaluating Results for Random Forest Model
+  
+  rforest_results <-
+    patient_rforest_workflow %>%
+      fit_resamples(
+        resamples=patient_folds,
+        metrics=custom_metrics,
+        control=control_resamples(save_pred = TRUE)
+      )
+
+  rforest_results %>% collect_metrics(summarize=TRUE)
+  
+
+  #To obtain actual model predictions, we use the following function 
+  
+  rforest_predictions <-
+    rforest_results %>%
+    collect_predictions()
+
+  #creating confusion metrics
+  
+  rforest_predictions %>%
+    conf_mat(No.show,.pred_class)%>%
+    autoplot(type="heatmap")
+
+
+
+  #D3 . Evaluating Results for K Nearest Neighbor
+  
+  knn_results <-
+    patient_knn_workflow %>%
+      fit_resamples(
+        resamples=patient_folds,
+        metrics=custom_metrics,
+        control=control_resamples(save_pred = TRUE)
+      )
+
+  knn_results %>% collect_metrics(summarize=TRUE)
+  
+   #To obtain actual model predictions, we use the following function 
+  
+  knn_predictions <-
+    knn_results %>%
+    collect_predictions()
+
+  #creating confusion metrics
+  
+  knn_predictions %>%
+    conf_mat(No.show,.pred_class)%>%
+    autoplot(type="heatmap")
+
+ #F Interpretting the model.
+  #https://medium.com/the-researchers-guide/modelling-binary-logistic-regression-using-tidymodels-library-in-r-part-1-c1bdce0ac055
+
+ 
+
+ 
+
+ 
+
+```  
+
+
 
