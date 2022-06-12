@@ -138,8 +138,15 @@ summarise(aver_Age = mean(Age))%>% # grouping by neighbour hood with gender to g
   ungroup()
   #knitr::kable()
   
- 
+ range(data$Age) # getiing the range of age variable which is -1 to 115
+ boxplot(data$Age)
 
+ 
+ data <- data[data$Age>=0,] # removing negative values in age 
+  hist(data$Age) # histograme of age 
+
+table(data$No.show)%>%
+  knitr::kable()
 
 data%>%
   group_by(Neighbourhood)%>% # getting the ditinct count of patient by neighubourhood
@@ -218,7 +225,12 @@ pv6 <-  data %>% ggplot()+geom_bar(aes(SMS_received, fill = No.show))
 grid.arrange(pv1,pv2,pv3,pv4,pv5,pv6, nrow=2)
 
 
-
+appointment.cleaned$DayAppointment <- weekdays(appointment.cleaned$AppointmentDay)
+appointment.cleaned %>% 
+  group_by(DayAppointment, Gender) %>% 
+  summarize(total.noShowPropotion = sum(NoShow == 'Yes')) %>% 
+  ggplot(aes(x=DayAppointment, y =total.noShowPropotion,fill=Gender)) + 
+  geom_col()
 
 
   
@@ -278,7 +290,7 @@ patient_folds <- vfold_cv(train_data, v=5, strata=No.show) #using stratified sam
 
 recipe_patients <- 
   recipe(No.show ~ 
-           Age+  Scholarship+Hipertension+Diabetes+Alcoholism+Handcap+ SMS_received,days_lag,
+           Age+ Gender+ Scholarship+Hipertension+Diabetes+Alcoholism+ SMS_received,days_lag,
            data = train_data) %>%
     
     step_dummy(all_nominal(), -all_outcomes())%>% # create dummy variables for all factors
@@ -456,6 +468,176 @@ patient_knn_workflow <- workflow()%>%
  
 
 ```  
+##creating another recipe 
+
+```{r}
+recipe_patients_2 <- 
+  recipe(No.show ~ 
+           Age+ Gender+Hipertension+Diabetes+Alcoholism+Handcap+ SMS_received+days_lag,
+           data = train_data) %>%
+    
+    step_dummy(all_nominal(), -all_outcomes())%>% # create dummy variables for all factors
+    step_corr(all_predictors()) %>% # This will remove corrleation amongst the predictor variables
+    step_center(all_predictors(),-all_outcomes()) %>% # Subtract the mean from all predictors
+    step_scale(all_predictors(), -all_outcomes()) %>% # scale i.e. divide by standard deviation
+    step_smote(No.show, over_ratio=0.25) 
+     
+```
+##creating models with recipe 2 (logestic reg)
+```{r}
+ #setting metrics for model evaluation
+  custom_metrics <-metric_set(accuracy, sens, spec, precision, recall,f_meas,kap)
+
+#A1. Creating Model #1 Logistic Regression
+
+patient_model_lgr_2 <- logistic_reg() %>%
+  set_engine("glm") %>%
+  set_mode("classification")
+
+#B1. Creating a Workflow to bundle our recipe 2 with our model Logistic Regression
+
+patient_lgr_workflow_2 <- workflow()%>%
+  add_model(patient_model_lgr)%>%
+    add_recipe(recipe_patients_2)
+
+#C1. Fitting our logistic regression model.
 
 
+ patient_lgr_fit_2<- 
+   
+   patient_lgr_workflow_2 %>%
+   
+      fit(train_data)
+ 
+ #D1 . Evaluating Results for Logistic Regression Model
+  
+  lgr_results_2<-
+    patient_lgr_workflow_2 %>%
+      fit_resamples(
+        resamples=patient_folds,
+        metrics=custom_metrics,
+        control=control_resamples(save_pred = TRUE)
+      )
+
+  lgr_results_2 %>% collect_metrics(summarize=TRUE)
+  
+  #To obtain actual model predictions, we use the following function 
+  
+  lgr_predictions_2 <-
+    lgr_results_2 %>%
+    collect_predictions()
+
+  #creating confusion metrics
+  
+  lgr_predictions_2 %>%
+    conf_mat(No.show,.pred_class)%>%
+    autoplot(type="heatmap")
+```
+ 
+###2 Random forest (recipe 2)
+```{r}
+#A2 Creating Model #2 Random Forest
+
+patient_model_rforest_2 <-rand_forest(
+  trees=100
+)%>%
+  set_engine("ranger")%>%
+  set_mode("classification")
+
+#B2. Creating a Workflow to bundle our recipe with our model Random Forest
+
+
+patient_rforest_workflow_2 <- workflow()%>%
+  add_model(patient_model_rforest)%>%
+    add_recipe(recipe_patients_2)
+
+ 
+ #C2. Fitting our Random Forest model.
+  patient_rforest_fit_2 <- 
+   
+   patient_rforest_workflow %>%
+  
+      fit(train_data)
+  
+  
+ #D2 . Evaluating Results for Random Forest Model
+  
+  rforest_results_2 <-
+    patient_rforest_workflow_2%>%
+      fit_resamples(
+        resamples=patient_folds,
+        metrics=custom_metrics,
+        control=control_resamples(save_pred = TRUE)
+      )
+
+  rforest_results_2 %>% collect_metrics(summarize=TRUE)
+  
+
+  #To obtain actual model predictions, we use the following function 
+  
+  rforest_predictions_2 <-
+    rforest_results_2 %>%
+    collect_predictions()
+
+  #creating confusion metrics
+  
+  rforest_predictions_2%>%
+    conf_mat(No.show,.pred_class)%>%
+    autoplot(type="heatmap")
+
+```
+##3 making knn prediction using recipe 2 
+```{r}
+#A3. Creating Model #3 K-nearest Neighbor
+
+patient_model_knn_2 <-nearest_neighbor(
+  neighbors  =4
+)%>%
+  set_engine("kknn")%>%
+  set_mode("classification")
+
+
+
+
+#B3. Creating a Workflow to bundle our recipe with our model K Nearest Neighbor
+
+
+patient_knn_workflow_2 <- workflow()%>%
+  add_model(patient_model_knn)%>%
+    add_recipe(recipe_patients_2)
+
+  
+   #C3. Fitting our KNN model.
+  patient_knn_fit_2 <- 
+   
+   patient_knn_workflow_2 %>%
+  
+      fit(train_data)
+ 
+
+
+  #D3 . Evaluating Results for K Nearest Neighbor
+  
+  knn_results_2 <-
+    patient_knn_workflow_2 %>%
+      fit_resamples(
+        resamples=patient_folds,
+        metrics=custom_metrics,
+        control=control_resamples(save_pred = TRUE)
+      )
+
+  knn_results_2 %>% collect_metrics(summarize=TRUE)
+  
+   #To obtain actual model predictions, we use the following function 
+  
+  knn_predictions_2<-
+    knn_results_2 %>%
+    collect_predictions()
+
+  #creating confusion metrics
+  
+  knn_predictions_2 %>%
+    conf_mat(No.show,.pred_class)%>%
+    autoplot(type="heatmap")
+```
 
