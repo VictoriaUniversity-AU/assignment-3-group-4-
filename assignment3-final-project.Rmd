@@ -19,7 +19,8 @@ library(reshape2)
 library(heatmaply)
 library(gridExtra)
 library(themis)
-
+library(stringr)
+library(cluster)
 
 options(scipen = 100) # using scipen to avoid scientific format notation in patient ID.
 
@@ -225,12 +226,6 @@ pv6 <-  data %>% ggplot()+geom_bar(aes(SMS_received, fill = No.show))
 grid.arrange(pv1,pv2,pv3,pv4,pv5,pv6, nrow=2)
 
 
-appointment.cleaned$DayAppointment <- weekdays(appointment.cleaned$AppointmentDay)
-appointment.cleaned %>% 
-  group_by(DayAppointment, Gender) %>% 
-  summarize(total.noShowPropotion = sum(NoShow == 'Yes')) %>% 
-  ggplot(aes(x=DayAppointment, y =total.noShowPropotion,fill=Gender)) + 
-  geom_col()
 
 
   
@@ -341,8 +336,8 @@ patient_lgr_workflow <- workflow()%>%
         control=control_resamples(save_pred = TRUE)
       )
 
-  lgr_results %>% collect_metrics(summarize=TRUE)
-  
+  lgr_results_metrics <- lgr_results %>% collect_metrics(summarize=TRUE)
+  write.csv(lgr_results_metrics,"lgr_results_metrics.csv")
   #To obtain actual model predictions, we use the following function 
   
   lgr_predictions <-
@@ -390,8 +385,8 @@ patient_rforest_workflow <- workflow()%>%
         control=control_resamples(save_pred = TRUE)
       )
 
-  rforest_results %>% collect_metrics(summarize=TRUE)
-  
+ rforest_results_metrics <- rforest_results %>% collect_metrics(summarize=TRUE)
+  write.csv(rforest_results_metrics,"rforest_result_metrics.csv")
 
   #To obtain actual model predictions, we use the following function 
   
@@ -444,7 +439,8 @@ patient_knn_workflow <- workflow()%>%
         control=control_resamples(save_pred = TRUE)
       )
 
-  knn_results %>% collect_metrics(summarize=TRUE)
+ knn_result_metrics <- knn_results %>% collect_metrics(summarize=TRUE)
+write.csv(knn_result_metrics,"knn_result_metrics.csv")  
   
    #To obtain actual model predictions, we use the following function 
   
@@ -483,7 +479,7 @@ recipe_patients_2 <-
     step_smote(No.show, over_ratio=0.25) 
      
 ```
-##creating models with recipe 2 (logestic reg)
+##creating models with recipe 2 (logistic reg)
 ```{r}
  #setting metrics for model evaluation
   custom_metrics <-metric_set(accuracy, sens, spec, precision, recall,f_meas,kap)
@@ -519,7 +515,9 @@ patient_lgr_workflow_2 <- workflow()%>%
         control=control_resamples(save_pred = TRUE)
       )
 
-  lgr_results_2 %>% collect_metrics(summarize=TRUE)
+  
+  lgr_results_metrics_2 <- lgr_results_2 %>% collect_metrics(summarize=TRUE)
+  write.csv(lgr_results_metrics_2,"lgr_results_metrics_2.csv")
   
   #To obtain actual model predictions, we use the following function 
   
@@ -570,7 +568,8 @@ patient_rforest_workflow_2 <- workflow()%>%
         control=control_resamples(save_pred = TRUE)
       )
 
-  rforest_results_2 %>% collect_metrics(summarize=TRUE)
+  rforest_results_metrics_2 <- rforest_results_2 %>% collect_metrics(summarize=TRUE)
+  write.csv(rforest_results_metrics_2,"rforest_result_metrics_2.csv")
   
 
   #To obtain actual model predictions, we use the following function 
@@ -626,7 +625,8 @@ patient_knn_workflow_2 <- workflow()%>%
         control=control_resamples(save_pred = TRUE)
       )
 
-  knn_results_2 %>% collect_metrics(summarize=TRUE)
+ knn_result_metrics_2 <- knn_results_2 %>% collect_metrics(summarize=TRUE)
+write.csv(knn_result_metrics_2,"knn_result_metrics_2.csv")  
   
    #To obtain actual model predictions, we use the following function 
   
@@ -639,5 +639,77 @@ patient_knn_workflow_2 <- workflow()%>%
   knn_predictions_2 %>%
     conf_mat(No.show,.pred_class)%>%
     autoplot(type="heatmap")
+```
+##clustering 
+
+
+```{r}
+#install.packages("factoextra")
+library(factoextra)
+
+data_kmean <- data[,c(7,6,8:13,15:16)]
+
+str(data_kmean)
+# making anew data set and change the structure of the data set as integer 
+ data_kmean <- mutate_at(data_kmean, vars('Age',
+                    'Scholarship',
+                    'Hipertension',
+                    'Diabetes',
+                    'Alcoholism',
+                    'Handcap',
+                    'SMS_received',
+                    'NoShowInt',
+                    'days_lag',
+                    'Neighbourhood'
+                    ), as.integer)
+ 
+
+ head(data_kmean)
+data_kmean_scale <-scale(data_kmean)  
+ head(data_kmean_scale)
+ 
+ 
+ 
+
+
+library(factoextra)
+
+  set.seed(123)
+
+  km_results <- kmeans(data_kmean_scale[!is.na(data_kmean)],centers=3, nstart = 25) #The centers argument describes the number of clusters we want, while nstart describes a starting point for algorithm.
+  km_results
+  
+  fviz_cluster(km_results,data=data_kmean,
+               
+               choose.vars = c('Neighbourhood','Age','days_lag'),
+               
+               ellipse.type = "norm",
+             geom = "point",
+
+             palette = "jco",
+             main = "Cluster Plot",
+             ggtheme = theme_minimal())
+  
+  #There are no major distinct clusters in the data that can be determined from the unsupervised classification techniques of K-means clustering. Most of our predicting data is categorical in nature with only 2 categories, hence classification with K means provides very little information. Therefore , we have used PCA to analyze the variance in data. 
+  
+ 
+  
+# Using Principal component Analysis to understand which variables(factor are important for supervised) explain the variance in data.
+  
+  library(ggbiplot)
+
+  
+  data_kmeans_pca <- prcomp(data_kmean, center = TRUE,scale. = TRUE)
+
+summary(data_kmeans_pca)
+
+ggbiplot(data_kmeans_pca)
+
+
+
+
+
+# Inspect the result
+summary(km.results)
 ```
 

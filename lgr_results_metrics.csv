@@ -1,0 +1,8 @@
+"",".metric",".estimator","mean","n","std_err",".config"
+"1","accuracy","binary",0.798405192635553,5,8.84351299805142e-06,"Preprocessor1_Model1"
+"2","f_meas","binary",0.887903566791607,5,5.46870708710928e-06,"Preprocessor1_Model1"
+"3","kap","binary",0,5,0,"Preprocessor1_Model1"
+"4","precision","binary",0.798405192635553,5,8.84351299805142e-06,"Preprocessor1_Model1"
+"5","recall","binary",1,5,0,"Preprocessor1_Model1"
+"6","sens","binary",1,5,0,"Preprocessor1_Model1"
+"7","spec","binary",0,5,0,"Preprocessor1_Model1"
