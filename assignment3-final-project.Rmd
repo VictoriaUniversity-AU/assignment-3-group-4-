@@ -82,6 +82,10 @@ skim(data)%>%
   knitr::kable()
 
 
+data%>% count(No.show)%>%
+  knitr::kable()
+
+
 #Check Missing Values : There are no missing values in the data
 
 sapply(data,function(x)sum(is.na(x)))
@@ -337,8 +341,10 @@ patient_lgr_workflow <- workflow()%>%
       )
 
   lgr_results_metrics <- lgr_results %>% collect_metrics(summarize=TRUE)
-  write.csv(lgr_results_metrics,"lgr_results_metrics.csv")
-  #To obtain actual model predictions, we use the following function 
+  write.csv(lgr_results_metrics,"lgr_results_metrics.csv")#To obtain actual model predictions, we use the following function 
+  #writing the results in csv to compare in excel 
+  
+  
   
   lgr_predictions <-
     lgr_results %>%
@@ -386,7 +392,7 @@ patient_rforest_workflow <- workflow()%>%
       )
 
  rforest_results_metrics <- rforest_results %>% collect_metrics(summarize=TRUE)
-  write.csv(rforest_results_metrics,"rforest_result_metrics.csv")
+  write.csv(rforest_results_metrics,"rforest_result_metrics.csv")   #writing the results in csv to compare in excel 
 
   #To obtain actual model predictions, we use the following function 
   
@@ -440,7 +446,7 @@ patient_knn_workflow <- workflow()%>%
       )
 
  knn_result_metrics <- knn_results %>% collect_metrics(summarize=TRUE)
-write.csv(knn_result_metrics,"knn_result_metrics.csv")  
+write.csv(knn_result_metrics,"knn_result_metrics.csv")  ## writing the results in csv to compare in excel 
   
    #To obtain actual model predictions, we use the following function 
   
@@ -690,7 +696,7 @@ library(factoextra)
              main = "Cluster Plot",
              ggtheme = theme_minimal())
   
-  #There are no major distinct clusters in the data that can be determined from the unsupervised classification techniques of K-means clustering. Most of our predicting data is categorical in nature with only 2 categories, hence classification with K means provides very little information. Therefore , we have used PCA to analyze the variance in data. 
+  #There are no major distinct clusters in the data that can be determined from the unsupervised classification techniques of K-means clustering. Most of our predicting data is categorical in nature with only 2 categories, hence classification with K means provides very little information. Therefore , we have used PCA(Principal component Analysis) to analyze the variance in data. 
   
  
   
